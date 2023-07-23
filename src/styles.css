@@ -1,0 +1,46 @@
+@import "components/menu-bar/menu-bar.css";
+@import "components/menu-item/menu-item.css";
+@import "components/icon/icon.css";
+
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  line-height: 24px;
+  font-weight: 400;
+  cursor: default;
+
+  color: #f6f6f6;
+  background-color: #282828;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+nav {
+  float: left;
+  height: 100%;
+  position: relative;
+  top: 50%;
+  -ms-transform: translateY(-50%);
+  transform: translateY(-50%);
+  margin: 0;
+}
+
+ul {
+  list-style-type: none;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.chevron-down {
+  margin: 0 6px;
+}
