@@ -21,4 +21,8 @@ const menuBar: MenuBar = MenuBar.create(document.getElementById("root"));
         .addSpacer("4px")
 
     const term = await XTerminal.create(document.getElementById("root"));
+
+    menuBar.addEventListener("click", () => {
+        term.kill();
+    })
 }())

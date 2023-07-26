@@ -47,6 +47,10 @@ export class XTerminal extends Component {
             this._xterm.write(text);
         })
     }
+
+    kill() {
+        invoke("pty_kill", { fd: this.fd }).then();
+    }
 }
 
 customElements.define("x-terminal", XTerminal);
