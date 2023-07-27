@@ -4,32 +4,13 @@
 
 mod tty;
 
-use std::ffi::c_void;
-use std::time::Duration;
-use nix::libc::{self, pid_t, POLLIN};
-use nix::poll::{poll, PollFd, PollFlags};
-use tauri::Manager;
+use nix::errno::Errno;
+use nix::libc::{self, pid_t};
 
 #[tauri::command]
 fn pty_spawn(app_handle: tauri::AppHandle) -> Result<pid_t, String> {
     let master = tty::unix::spawn().map_err(|err| err.to_string())?;
-
-    // TODO move to unix dir
-    // poll the newly created fd
-    std::thread::spawn(move || {
-        let flags = PollFlags::from_bits(POLLIN).unwrap();
-        let poll_fd = PollFd::new(master, flags);
-        let mut i = 0;
-        loop {
-            println!("loop {i}");
-            i += 1;
-            match poll(&mut [poll_fd], -1) {
-                Ok(_) => app_handle.emit_all("pty-event", ()).unwrap(),
-                Err(_) => return
-            };
-            std::thread::sleep(Duration::from_millis(1));
-        }
-    });
+    tty::unix::poll(master, app_handle).map_err(|err| err.to_string())?;
 
     Ok(master)
 }
@@ -40,9 +21,12 @@ fn pty_read(fd: pid_t) -> Result<String, String> {
 
     let mut buf = [0; 0x1000];
 
-    match read(fd, &mut buf) {
+    return match read(fd, &mut buf) {
         Ok(r) => Ok(String::from_utf8_lossy(&buf[..r]).to_string()),
-        Err(e) => Err(e.to_string())
+        Err(e) => {
+            if e == Errno::EAGAIN { return Ok("".into()); }
+            Err(e.to_string())
+        },
     }
 }
 
@@ -52,7 +36,7 @@ fn pty_write(fd: pid_t, data: String) -> Result<(), String> {
 
     match write(fd, data.as_bytes()) {
         Ok(_) => Ok(()),
-        Err(e) => Err(e.to_string())
+        Err(e) => Err(e.to_string()),
     }
 }
 

@@ -11,9 +11,6 @@ const menuBar: MenuBar = MenuBar.create(document.getElementById("root"));
     more.id = "more-menu-icon"
     const moreItem = MenuItem.create();
 
-    const icon = Icon.create("src/assets/icons/vscode-dark/more.svg");
-    const iconItem = MenuItem.create();
-
     menuBar
         .appendChild(moreItem)
         .appendChild(more);
@@ -21,8 +18,4 @@ const menuBar: MenuBar = MenuBar.create(document.getElementById("root"));
         .addSpacer("4px")
 
     const term = await XTerminal.create(document.getElementById("root"));
-
-    menuBar.addEventListener("click", () => {
-        term.kill();
-    })
 }())

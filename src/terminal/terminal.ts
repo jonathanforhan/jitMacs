@@ -12,6 +12,10 @@ export class XTerminal extends Component {
         super();
 
         listen("pty-event", () => this.readXTerm()).then();
+        // TODO handle death
+        listen("pty-die", e => {
+            console.log(e.payload, " is dead");
+        }).then();
     }
 
     static async create(parent?: HTMLElement): Promise<XTerminal> {
@@ -44,6 +48,9 @@ export class XTerminal extends Component {
 
     readXTerm() {
         const s = invoke("pty_read", { fd: this.fd }).then((text) => {
+            if (text.length === 0) {
+                return;
+            }
             this._xterm.write(text);
         })
     }

@@ -1,4 +1,4 @@
-use nix::libc::{self, F_GETFL, F_SETFL, fcntl, O_NONBLOCK, TIOCSCTTY};
+use nix::libc::{self, F_GETFL, F_SETFL, fcntl, O_NONBLOCK, POLLERR, POLLHUP, POLLIN, POLLNVAL, TIOCSCTTY};
 use nix::pty::openpty;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::sys::termios::{self, InputFlags, SetArg};
@@ -9,76 +9,16 @@ use std::mem::MaybeUninit;
 use std::os::fd::{FromRawFd, RawFd};
 use std::os::unix::prelude::CommandExt;
 use std::process::{Command, Stdio};
+use std::time::Duration;
+use nix::poll::{PollFd, PollFlags};
+use nix::unistd::close;
+use tauri::Manager;
 
-struct ShellUser {
-    user: String,
-    home: String,
-    shell: String,
-}
-
-impl ShellUser {
-    fn from_env() -> Result<ShellUser> {
-        let mut buf = [0; 1024];
-        // Create zeroed passwd struct.
-        let mut entry: MaybeUninit<libc::passwd> = MaybeUninit::uninit();
-        let mut res: *mut libc::passwd = ptr::null_mut();
-
-        // Try and read the pw file.
-        let uid = unsafe { libc::getuid() };
-        let status = unsafe { libc::getpwuid_r(
-            uid,
-            entry.as_mut_ptr(),
-            buf.as_mut_ptr() as *mut _,
-            buf.len(),
-            &mut res
-        )};
-        let entry = unsafe { entry.assume_init() };
-
-        if status < 0 {
-            return Err(Error::new(ErrorKind::Other, "getpwuid_r failed"));
-        }
-
-        if res.is_null() {
-            return Err(Error::new(ErrorKind::Other, "passwd is null"));
-        }
-
-        // Sanity check.
-        assert_eq!(entry.pw_uid, uid);
-
-        let (
-            pw_name,
-            pw_dir,
-            pw_shell
-        ) = (
-            unsafe { CStr::from_ptr(entry.pw_name).to_str().unwrap() },
-            unsafe { CStr::from_ptr(entry.pw_dir).to_str().unwrap() },
-            unsafe { CStr::from_ptr(entry.pw_shell).to_str().unwrap() }
-        );
-
-
-        let user = match env::var("HOME") {
-            Ok(user) => user,
-            Err(_) => pw_name.to_owned()
-        };
-
-        let home = match env::var("HOME") {
-            Ok(home) => home,
-            Err(_) => pw_dir.to_owned()
-        };
-
-        let shell = match env::var("SHELL") {
-            Ok(shell) => shell,
-            Err(_) => pw_shell.to_owned()
-        };
-
-        Ok(Self {
-            user,
-            home,
-            shell
-        })
-    }
-}
-
+/**
+ * Spawns a pty, uses openpty, builds a process group
+ * forks a bash process and returns our master fd,
+ * IO is non-blocking
+ */
 pub fn spawn() -> Result<RawFd> {
     let ends = openpty(None, None)?;
     let (master, slave) = (ends.master, ends.slave);
@@ -137,14 +77,13 @@ pub fn spawn() -> Result<RawFd> {
     }
 
     match builder.spawn() {
-        Ok(_child) => {
-            unsafe {
-                // set non blocking
-                let res = fcntl(master, F_SETFL, fcntl(master, F_GETFL, 0) | O_NONBLOCK);
-                assert_eq!(res, 0);
-            }
+        Ok(_child) => unsafe {
+            // set non blocking
+            let res = fcntl(master, F_SETFL, fcntl(master, F_GETFL, 0) | O_NONBLOCK);
+            assert_eq!(res, 0);
+
             Ok(master)
-        }
+        },
         Err(err) => Err(Error::new(
             err.kind(),
             format!(
@@ -153,5 +92,113 @@ pub fn spawn() -> Result<RawFd> {
                 err
             )
         ))
+    }
+}
+
+/**
+ * Polls a file descriptor, note that poll only alerts us
+ * that a fd will not block on read not that is has any contents
+ * this is why we get false positives. This has two side-effects:
+ *     1 - we use a 3 ms thread sleep to not run up the cpu on false positives
+ *     2 - we return an empty string from pty_read on a EAGAIN errno
+ */
+pub fn poll(fd: RawFd, app_handle: tauri::AppHandle) -> Result<()>{
+    // poll the newly created fd
+    std::thread::spawn(move || {
+        let flags = PollFlags::from_bits(POLLIN).unwrap();
+        let mut fds = [PollFd::new(fd, flags)];
+
+        while let Ok(n) = nix::poll::poll(&mut fds, -1) {
+            if n <= 0 { break }
+            if let Some(events) = fds[0].revents() {
+                // break if err
+                if events.bits() & (POLLERR | POLLHUP | POLLNVAL) != 0 {
+                    break
+                }
+                // emit if non-blocking read
+                else if events.bits() & POLLIN != 0 {
+                    let _ = app_handle.emit_all("pty-event", ());
+                }
+            }
+            std::thread::sleep(Duration::from_millis(3));
+        }
+        let _ = app_handle.emit_all("pty-die", fd);
+        close(fd)
+    });
+
+    Ok(())
+}
+
+/**
+ * Shell User composed of environment variables
+ */
+struct ShellUser {
+    user: String,
+    home: String,
+    shell: String,
+}
+
+impl ShellUser {
+    /**
+     * Constructors a shell user from environment
+     */
+    fn from_env() -> Result<ShellUser> {
+        let mut buf = [0; 1024];
+        // Create zeroed passwd struct.
+        let mut entry: MaybeUninit<libc::passwd> = MaybeUninit::uninit();
+        let mut res: *mut libc::passwd = ptr::null_mut();
+
+        // Try and read the pw file.
+        let uid = unsafe { libc::getuid() };
+        let status = unsafe { libc::getpwuid_r(
+            uid,
+            entry.as_mut_ptr(),
+            buf.as_mut_ptr() as *mut _,
+            buf.len(),
+            &mut res
+        )};
+        let entry = unsafe { entry.assume_init() };
+
+        if status < 0 {
+            return Err(Error::new(ErrorKind::Other, "getpwuid_r failed"));
+        }
+
+        if res.is_null() {
+            return Err(Error::new(ErrorKind::Other, "passwd is null"));
+        }
+        // Sanity check.
+        assert_eq!(entry.pw_uid, uid);
+
+        let (
+            pw_name,
+            pw_dir,
+            pw_shell
+        ) = (
+            unsafe { CStr::from_ptr(entry.pw_name).to_str().unwrap_unchecked() },
+            unsafe { CStr::from_ptr(entry.pw_dir).to_str().unwrap_unchecked() },
+            unsafe { CStr::from_ptr(entry.pw_shell).to_str().unwrap_unchecked() }
+        );
+
+
+        let user = match env::var("HOME") {
+            Ok(user) => user,
+            Err(_) => pw_name.to_owned()
+        };
+
+        let home = match env::var("HOME") {
+            Ok(home) => home,
+            Err(_) => pw_dir.to_owned()
+        };
+
+        let shell = match env::var("SHELL") {
+            Ok(shell) => shell,
+            Err(_) => pw_shell.to_owned()
+        };
+
+        Ok(Self {
+            user,
+            home,
+            shell
+        })
     }
 }
