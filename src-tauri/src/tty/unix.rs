@@ -1,17 +1,19 @@
-use nix::libc::{self, F_GETFL, F_SETFL, fcntl, O_NONBLOCK, POLLERR, POLLHUP, POLLIN, POLLNVAL, TIOCSCTTY};
+mod shell;
+use shell::ShellUser;
+use crate::payload::Payload;
+
+use nix::libc::{self, EBADFD, EINTR, F_GETFD, F_GETFL, F_SETFL, O_NONBLOCK, POLLERR, POLLHUP, POLLIN, POLLNVAL, TIOCSCTTY};
+use nix::poll::{PollFd, PollFlags};
 use nix::pty::openpty;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use nix::sys::termios::{self, InputFlags, SetArg};
-use std::{env, ptr};
-use std::ffi::CStr;
+use nix::unistd;
 use std::io::{Error, ErrorKind, Result};
-use std::mem::MaybeUninit;
+use std::thread;
 use std::os::fd::{FromRawFd, RawFd};
 use std::os::unix::prelude::CommandExt;
 use std::process::{Command, Stdio};
-use std::time::Duration;
-use nix::poll::{PollFd, PollFlags};
-use nix::unistd::close;
+use nix::errno::errno;
 use tauri::Manager;
 
 /**
@@ -38,7 +40,7 @@ pub fn spawn() -> Result<RawFd> {
     // Ownership of fd is transferred to the Stdio structs and will be closed by them at the end of
     // this scope. (It is not an issue that the fd is closed three times since File::drop ignores
     // error on libc::close.).
-    builder.stdin(unsafe  { Stdio::from_raw_fd(slave) });
+    builder.stdin (unsafe { Stdio::from_raw_fd(slave) });
     builder.stderr(unsafe { Stdio::from_raw_fd(slave) });
     builder.stdout(unsafe { Stdio::from_raw_fd(slave) });
 
@@ -79,7 +81,7 @@ pub fn spawn() -> Result<RawFd> {
     match builder.spawn() {
         Ok(_child) => unsafe {
             // set non blocking
-            let res = fcntl(master, F_SETFL, fcntl(master, F_GETFL, 0) | O_NONBLOCK);
+            let res = libc::fcntl(master, F_SETFL, libc::fcntl(master, F_GETFL, 0) | O_NONBLOCK);
             assert_eq!(res, 0);
 
             Ok(master)
@@ -96,109 +98,75 @@ pub fn spawn() -> Result<RawFd> {
 }
 
 /**
- * Polls a file descriptor, note that poll only alerts us
- * that a fd will not block on read not that is has any contents
- * this is why we get false positives. This has two side-effects:
- *     1 - we use a 3 ms thread sleep to not run up the cpu on false positives
- *     2 - we return an empty string from pty_read on a EAGAIN errno
+ * Polls a file descriptor, we call read in this thread to ensure blocking
  */
 pub fn poll(fd: RawFd, app_handle: tauri::AppHandle) -> Result<()>{
+    const ERR_BITS: i16 = POLLERR | POLLHUP | POLLNVAL;
+    validate_fd(fd)?;
+
     // poll the newly created fd
-    std::thread::spawn(move || {
+    thread::spawn(move || {
         let flags = PollFlags::from_bits(POLLIN).unwrap();
         let mut fds = [PollFd::new(fd, flags)];
 
-        while let Ok(n) = nix::poll::poll(&mut fds, -1) {
-            if n <= 0 { break }
-            if let Some(events) = fds[0].revents() {
-                // break if err
-                if events.bits() & (POLLERR | POLLHUP | POLLNVAL) != 0 {
-                    break
-                }
-                // emit if non-blocking read
-                else if events.bits() & POLLIN != 0 {
-                    let _ = app_handle.emit_all("pty-event", ());
-                }
+        while let Ok(n) = nix::poll::ppoll(&mut fds, None, None) {
+            if n <= 0 {
+                if errno() == EINTR { continue } else { break }
             }
-            std::thread::sleep(Duration::from_millis(3));
+
+            match fds[0].revents() {
+                Some(events) => {
+                    if events.bits() & ERR_BITS != 0 { break }
+                    // skip if no buffer data
+                    if events.bits() & POLLIN == 0 { continue }
+                },
+                None => continue
+            };
+
+            // return read buffer if data available
+            let _ = match read(fd) {
+                Ok(s) => app_handle.emit_all("pty-event", Payload {
+                    res: s,
+                    status: 200
+                }),
+                Err(e) => app_handle.emit_all("pty-event", Payload {
+                    res: e.to_string(),
+                    status: 500
+                }),
+            };
         }
-        let _ = app_handle.emit_all("pty-die", fd);
-        close(fd)
+        let _ = app_handle.emit_all("pty-die", Payload {
+            res: fd.to_string(),
+            status: 200
+        });
+        unistd::close(fd)
     });
 
     Ok(())
 }
 
-/**
- * Shell User composed of environment variables
- */
-struct ShellUser {
-    user: String,
-    home: String,
-    shell: String,
+pub fn read(fd: RawFd) -> Result<String> {
+    let mut buf = [0; 0x1000];
+
+    match unistd::read(fd, &mut buf) {
+        Ok(r) => Ok(String::from_utf8_lossy(&buf[..r]).into()),
+        Err(e) => Err(Error::new(ErrorKind::Other, format!("read failure {e}")))
+    }
 }
 
-impl ShellUser {
-    /**
-     * Constructors a shell user from environment
-     */
-    fn from_env() -> Result<ShellUser> {
-        let mut buf = [0; 1024];
-        // Create zeroed passwd struct.
-        let mut entry: MaybeUninit<libc::passwd> = MaybeUninit::uninit();
-        let mut res: *mut libc::passwd = ptr::null_mut();
+pub fn write(fd: RawFd, data: String) -> Result<()> {
+    match unistd::write(fd, data.as_bytes()) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(Error::new(ErrorKind::Other, format!("write failure {e}")))
+    }
+}
 
-        // Try and read the pw file.
-        let uid = unsafe { libc::getuid() };
-        let status = unsafe { libc::getpwuid_r(
-            uid,
-            entry.as_mut_ptr(),
-            buf.as_mut_ptr() as *mut _,
-            buf.len(),
-            &mut res
-        )};
-        let entry = unsafe { entry.assume_init() };
-
-        if status < 0 {
-            return Err(Error::new(ErrorKind::Other, "getpwuid_r failed"));
+fn validate_fd(fd: RawFd) -> Result<()> {
+    unsafe {
+        if libc::fcntl(fd, F_GETFD) != -1 || errno() != EBADFD {
+            Ok(())
+        } else {
+            Err(Error::new(ErrorKind::Other, format!("Invalid file descriptor: {fd}")))
         }
-
-        if res.is_null() {
-            return Err(Error::new(ErrorKind::Other, "passwd is null"));
-        }
-        // Sanity check.
-        assert_eq!(entry.pw_uid, uid);
-
-        let (
-            pw_name,
-            pw_dir,
-            pw_shell
-        ) = (
-            unsafe { CStr::from_ptr(entry.pw_name).to_str().unwrap_unchecked() },
-            unsafe { CStr::from_ptr(entry.pw_dir).to_str().unwrap_unchecked() },
-            unsafe { CStr::from_ptr(entry.pw_shell).to_str().unwrap_unchecked() }
-        );
-
-
-        let user = match env::var("HOME") {
-            Ok(user) => user,
-            Err(_) => pw_name.to_owned()
-        };
-
-        let home = match env::var("HOME") {
-            Ok(home) => home,
-            Err(_) => pw_dir.to_owned()
-        };
-
-        let shell = match env::var("SHELL") {
-            Ok(shell) => shell,
-            Err(_) => pw_shell.to_owned()
-        };
-
-        Ok(Self {
-            user,
-            home,
-            shell
-        })
     }
 }

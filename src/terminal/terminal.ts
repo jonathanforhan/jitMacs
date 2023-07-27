@@ -2,7 +2,8 @@ import {Terminal} from "xterm"
 import {FitAddon} from "xterm-addon-fit"
 import {Component} from "../component.ts";
 import {invoke} from "@tauri-apps/api/tauri";
-import {listen} from "@tauri-apps/api/event";
+import {Event, listen} from "@tauri-apps/api/event";
+import {Payload} from "../payload.ts";
 
 export class XTerminal extends Component {
     public fd: number;
@@ -11,10 +12,15 @@ export class XTerminal extends Component {
     constructor() {
         super();
 
-        listen("pty-event", () => this.readXTerm()).then();
+        listen("pty-event", (e: Event<Payload>) => {
+            console.assert(e.payload.status == 200);
+            this._xterm.write(e.payload.res);
+        }).then();
+
         // TODO handle death
-        listen("pty-die", e => {
-            console.log(e.payload, " is dead");
+        listen("pty-die", (e: Event<Payload>) => {
+            console.assert(e.payload.status == 200);
+            console.log(+e.payload.res, " is dead");
         }).then();
     }
 
@@ -44,15 +50,6 @@ export class XTerminal extends Component {
         fitAddon.fit();
         self._xterm = term;
         return self;
-    }
-
-    readXTerm() {
-        const s = invoke("pty_read", { fd: this.fd }).then((text) => {
-            if (text.length === 0) {
-                return;
-            }
-            this._xterm.write(text);
-        })
     }
 
     kill() {
