@@ -1,6 +1,7 @@
 .MenuBar {
     height: 2.5rem;
     border-bottom: 1px solid #3a3a3a;
+    box-shadow: 8px;
 }
 
 .MenuBar nav {

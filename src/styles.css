@@ -16,7 +16,7 @@
   font-weight: 400;
 
   color: #f6f6f6;
-  background-color: #282828;
+  background-color: #232225;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -25,9 +25,10 @@
   -webkit-text-size-adjust: 100%;
 }
 
-html, body {
+html, body, #root {
   margin: 0;
   padding: 0;
+  width: 100%;
   height: 100%;
-  overflow: hidden;
+  overflow-y: clip;
 }

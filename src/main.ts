@@ -18,4 +18,5 @@ const menuBar: MenuBar = MenuBar.create(document.getElementById("root"));
         .addSpacer("4px")
 
     const term = await XTerminal.create(document.getElementById("root"));
+    term.style.height = "calc(100% - 2.5rem)"; // account for menu-bar
 }())

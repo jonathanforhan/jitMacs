@@ -31,7 +31,9 @@
  *   other features.
  */
 
-.terminal {
+.XTerminal {
+    margin: 4px;
+    display: block;
     height: 100%;
 }
 

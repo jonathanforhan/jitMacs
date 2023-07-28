@@ -1,8 +1,10 @@
 mod shell;
 use shell::ShellUser;
-use crate::payload::Payload;
+use crate::payload::PtyPayload;
+pub mod window;
+use window::WindowSize;
 
-use nix::libc::{self, EBADFD, EINTR, F_GETFD, F_GETFL, F_SETFL, O_NONBLOCK, POLLERR, POLLHUP, POLLIN, POLLNVAL, TIOCSCTTY};
+use nix::libc::{self, EBADFD, EINTR, F_GETFD, F_GETFL, F_SETFL, O_NONBLOCK, POLLERR, POLLHUP, POLLIN, POLLNVAL, TIOCSCTTY, winsize};
 use nix::poll::{PollFd, PollFlags};
 use nix::pty::openpty;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -40,12 +42,12 @@ pub fn spawn() -> Result<RawFd> {
     // Ownership of fd is transferred to the Stdio structs and will be closed by them at the end of
     // this scope. (It is not an issue that the fd is closed three times since File::drop ignores
     // error on libc::close.).
-    builder.stdin (unsafe { Stdio::from_raw_fd(slave) });
-    builder.stderr(unsafe { Stdio::from_raw_fd(slave) });
-    builder.stdout(unsafe { Stdio::from_raw_fd(slave) });
-
-    builder.env("USER", user.user);
-    builder.env("HOME", user.home);
+    builder
+        .stdin (unsafe { Stdio::from_raw_fd(slave) })
+        .stderr(unsafe { Stdio::from_raw_fd(slave) })
+        .stdout(unsafe { Stdio::from_raw_fd(slave) })
+        .env("USER", user.user)
+        .env("HOME", user.home);
 
     unsafe {
         builder.pre_exec(move || {
@@ -125,18 +127,21 @@ pub fn poll(fd: RawFd, app_handle: tauri::AppHandle) -> Result<()>{
 
             // return read buffer if data available
             let _ = match read(fd) {
-                Ok(s) => app_handle.emit_all("pty-event", Payload {
-                    res: s,
+                Ok(res) => app_handle.emit_all("pty-event", PtyPayload {
+                    res,
+                    fd,
                     status: 200
                 }),
-                Err(e) => app_handle.emit_all("pty-event", Payload {
+                Err(e) => app_handle.emit_all("pty-event", PtyPayload {
                     res: e.to_string(),
+                    fd,
                     status: 500
                 }),
             };
         }
-        let _ = app_handle.emit_all("pty-die", Payload {
-            res: fd.to_string(),
+        let _ = app_handle.emit_all("pty-die", PtyPayload {
+            res: "".into(),
+            fd,
             status: 200
         });
         unistd::close(fd)
@@ -146,19 +151,28 @@ pub fn poll(fd: RawFd, app_handle: tauri::AppHandle) -> Result<()>{
 }
 
 pub fn read(fd: RawFd) -> Result<String> {
-    let mut buf = [0; 0x1000];
+    let mut buf: [u8; 0x1000] = [0; 0x1000];
 
     match unistd::read(fd, &mut buf) {
         Ok(r) => Ok(String::from_utf8_lossy(&buf[..r]).into()),
-        Err(e) => Err(Error::new(ErrorKind::Other, format!("read failure {e}")))
+        Err(e) => Err(Error::new(ErrorKind::Other, format!("Read failure {e}")))
     }
 }
 
 pub fn write(fd: RawFd, data: String) -> Result<()> {
     match unistd::write(fd, data.as_bytes()) {
         Ok(_) => Ok(()),
-        Err(e) => Err(Error::new(ErrorKind::Other, format!("write failure {e}")))
+        Err(e) => Err(Error::new(ErrorKind::Other, format!("Write failure {e}")))
     }
+}
+
+pub fn resize(fd: RawFd, window_size: WindowSize) -> Result<()> {
+    let window_size: winsize = window_size.to_winsize();
+
+    if unsafe { libc::ioctl(fd, libc::TIOCSWINSZ, &window_size as *const _) } < 0 {
+        return Err(Error::new(ErrorKind::Other, "Window resize failure"));
+    }
+    Ok(())
 }
 
 fn validate_fd(fd: RawFd) -> Result<()> {

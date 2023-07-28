@@ -1,7 +1,10 @@
 /**
- * data model of our server response
+ * data model of our server responses
  */
-export type Payload = {
+
+// pty server response
+export type PtyPayload = {
     res: string,
+    fd: number,
     status: number
 }

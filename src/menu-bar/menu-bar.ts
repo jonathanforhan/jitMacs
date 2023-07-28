@@ -21,6 +21,7 @@ export class MenuBar extends Component {
                 .appendChild(document.createElement("nav"))
                 .appendChild(self);
         }
+        self.style.height = "2.5rem";
         return self;
     }
 
