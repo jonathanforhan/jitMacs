@@ -1,6 +1,4 @@
-@import "menu-bar/menu-bar.css";
-@import "menu-item/menu-item.css";
-@import "icon/icon.css";
+@import "styles/menu-bar.css";
 @import "terminal/terminal.css";
 
 @font-face {
@@ -9,8 +7,7 @@
 }
 
 :root {
-  font-family: "JetBrainsMono NF", monospace;
-  /* font-family: Inter, Avenir, Helvetica, Arial, sans-serif; */
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 14px;
   line-height: 24px;
   font-weight: 400;
@@ -25,7 +22,7 @@
   -webkit-text-size-adjust: 100%;
 }
 
-html, body, #root {
+html, body {
   margin: 0;
   padding: 0;
   width: 100%;

@@ -1,6 +1,6 @@
+/*
 import {Terminal} from "xterm"
 import {FitAddon} from "xterm-addon-fit"
-import {Component} from "../component.ts";
 import {invoke} from "@tauri-apps/api/tauri";
 import {Event, listen} from "@tauri-apps/api/event";
 import {PtyPayload} from "../payload.ts";
@@ -12,9 +12,9 @@ export type WindowSize = {
     cellHeight: number
 }
 
-export class XTerminal extends Component {
-    public fd: number;
-    private _xterm;
+export class XTerminal extends HTMLElement {
+    public fd: number = -1;
+    private _xterm: Terminal;
 
     public constructor() {
         super();
@@ -74,3 +74,4 @@ export class XTerminal extends Component {
 }
 
 customElements.define("x-terminal", XTerminal);
+*/

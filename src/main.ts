@@ -1,22 +1,25 @@
-// import { invoke } from "@tauri-apps/api/tauri";
-import {MenuBar} from "./menu-bar/menu-bar.ts";
-import {Icon} from "./icon/icon.ts";
-import {XTerminal} from "./terminal/terminal.ts";
-import {MenuItem} from "./menu-item/menu-item.ts";
+import { invoke } from "@tauri-apps/api/tauri";
+import * as monaco from "monaco-editor";
+import * as fs from "@tauri-apps/api/fs";
 
-const menuBar: MenuBar = MenuBar.create(document.getElementById("root"));
-
+// main entry point
 (async function main() {
-    const more: Icon = Icon.create("src/assets/icons/vscode-dark/more.svg");
-    more.id = "more-menu-icon"
-    const moreItem = MenuItem.create();
+    monaco.editor.defineTheme("default", {
+        base: "vs-dark",
+        inherit: true,
+        rules: [],
+        colors: {},
+    });
+    monaco.editor.setTheme("default");
 
-    menuBar
-        .appendChild(moreItem)
-        .appendChild(more);
-    menuBar
-        .addSpacer("4px")
+    const contents = await fs.readTextFile("dev/jitMacs/src/main.ts", { dir: fs.BaseDirectory.Home });
+    monaco.editor.create(document.getElementById("editor-container")!, {
+        value: contents,
+        language: "javascript",
+        automaticLayout: true,
+    });
+}());
 
-    const term = await XTerminal.create(document.getElementById("root"));
-    term.style.height = "calc(100% - 2.5rem)"; // account for menu-bar
-}())
+// We must do this to present the main window after the DOM and CSS is loaded or else the screen
+// will start with the webview background and flash a different color than the desired theme
+window.onload = () => invoke("present");

@@ -22,6 +22,10 @@
       },
       "path": {
         "all": true
+      },
+      "fs": {
+        "all": true,
+        "scope": ["**"]
       }
     },
     "bundle": {
@@ -45,7 +49,8 @@
         "resizable": true,
         "title": "jitMacs",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "visible": false
       }
     ]
   }

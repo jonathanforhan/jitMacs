@@ -7,6 +7,7 @@ pub(crate) mod payload;
 use tty::unix::window::WindowSize;
 
 use nix::libc::{self, pid_t};
+use tauri::Manager;
 
 // map error to string for front end
 macro_rules! js_result {
@@ -33,9 +34,15 @@ fn pty_resize(fd: pid_t, window_size: WindowSize) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn pty_kill(fd: pid_t) {
-    unsafe { libc::kill(fd, libc::SIGINT) };
+fn present(window: tauri::Window) {
+    unsafe {
+        window.get_window("main")
+            .unwrap_unchecked()
+            .show()
+            .unwrap_unchecked();
+    }
 }
+
 
 fn main() {
     tauri::Builder::default()
@@ -43,7 +50,7 @@ fn main() {
                 pty_spawn,
                 pty_write,
                 pty_resize,
-                pty_kill
+                present
             ])
         .run(tauri::generate_context!())
         .expect("error while generating tauri app");
