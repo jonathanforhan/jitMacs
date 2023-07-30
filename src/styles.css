@@ -1,4 +1,4 @@
-@import "styles/menu-bar.css";
+@import "components/menu-bar/menu-bar.css";
 @import "terminal/terminal.css";
 
 @font-face {
@@ -12,8 +12,9 @@
   line-height: 24px;
   font-weight: 400;
 
-  color: #f6f6f6;
-  background-color: #232225;
+  --fg-color: #f6f6f6;
+  --bg-color: #232225;
+  --hl-color: #3a3a3a;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -27,5 +28,6 @@ html, body {
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow-y: clip;
+  color: var(--fg-color);
+  background: var(--bg-color);
 }

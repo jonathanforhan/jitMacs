@@ -1,4 +1,3 @@
-/*
 import {Terminal} from "xterm"
 import {FitAddon} from "xterm-addon-fit"
 import {invoke} from "@tauri-apps/api/tauri";
@@ -37,7 +36,7 @@ export class XTerminal extends HTMLElement {
         parent?.appendChild(self);
 
         self._xterm = new Terminal({
-            fontSize: 18,
+            fontSize: 14,
             fontFamily: "monospace",
             theme: {
                 background: "#232225"
@@ -74,4 +73,3 @@ export class XTerminal extends HTMLElement {
 }
 
 customElements.define("x-terminal", XTerminal);
-*/

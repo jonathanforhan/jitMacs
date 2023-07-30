@@ -1,9 +1,11 @@
 import { invoke } from "@tauri-apps/api/tauri";
 import * as monaco from "monaco-editor";
 import * as fs from "@tauri-apps/api/fs";
+import {XTerminal} from "./terminal/terminal.ts";
 
-// main entry point
 (async function main() {
+    await XTerminal.create(document.getElementById("terminal-container")!);
+
     monaco.editor.defineTheme("default", {
         base: "vs-dark",
         inherit: true,
