@@ -4,6 +4,7 @@ import * as fs from "@tauri-apps/api/fs";
 import {XTerminal} from "./terminal/terminal.ts";
 
 (async function main() {
+/*
     await XTerminal.create(document.getElementById("terminal-container")!);
 
     monaco.editor.defineTheme("default", {
@@ -20,6 +21,7 @@ import {XTerminal} from "./terminal/terminal.ts";
         language: "javascript",
         automaticLayout: true,
     });
+*/
 }());
 
 // We must do this to present the main window after the DOM and CSS is loaded or else the screen

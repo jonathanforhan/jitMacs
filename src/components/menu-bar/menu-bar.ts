@@ -5,6 +5,44 @@ class MenuBar extends HTMLElement {
         super()
             .attachShadow({ mode: "open" })
             .appendChild(template.content.cloneNode(true));
+
+    }
+
+    connectedCallback() {
+        const buttons: NodeListOf<Element> = this.shadowRoot.querySelectorAll(".dropdown-button");
+
+        this.shadowRoot.addEventListener("click", e => {
+            const clickedElement = e.target as Element;
+            const isDropdown = clickedElement.matches(".dropdown-button");
+
+            // if we clicked menu return
+            if (!isDropdown && clickedElement.parentElement.closest("menu-bar")) {
+                return;
+            }
+
+            // toggle active of clicked menu item
+            let currentDropdown;
+            if (isDropdown) {
+                currentDropdown = clickedElement.nextElementSibling;
+                currentDropdown.classList.toggle("active");
+            }
+
+            // deactivate menu if clicked outside of menu
+            for (const dropdown of this.shadowRoot?.querySelectorAll(".dropdown-menu.active")) {
+                if (dropdown !== currentDropdown) {
+                    dropdown.classList.remove("active");
+                }
+            }
+        });
+
+        document.body.addEventListener("click", e => {
+            if (this.contains(e.target as Node | null)) {
+                return;
+            }
+            for (const dropdown of this.shadowRoot?.querySelectorAll(".dropdown-menu.active")) {
+                dropdown.classList.remove("active");
+            }
+        })
     }
 }
 
@@ -12,7 +50,7 @@ template.innerHTML =
 `
 <div class="menu-bar">
   <div class="dropdown">
-    <button class="menu-item">
+    <button class="dropdown-button">
       <slot name="item-name"></slot>
     </button>
     <div class="dropdown-menu">
@@ -32,7 +70,7 @@ template.innerHTML =
         z-index: 1;
     }
 
-    .menu-item {
+    .dropdown-button {
         all: unset;
         width: fit-content;
         display: flex;
@@ -40,15 +78,10 @@ template.innerHTML =
         padding: 0 8px;
     }
 
-    .dropdown > .menu-item:focus,
-    .menu-item:hover {
+    .dropdown-button:hover {
         background: var(--hl-color);
     }
-
-    .icon {
-        margin: auto;
-    }
-
+    
     .dropdown-menu {
         position: absolute;
         background: var(--bg-color);
@@ -61,16 +94,17 @@ template.innerHTML =
         max-width: 30rem;
         box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.2);
         opacity: 0;
-        transform: translateY(-10px);
-        transition: opacity 150ms ease-in-out, transform 150ms ease-in-out;
+        transform: translateY(-5px);
+        transition: opacity 80ms ease-in-out, transform 80ms ease-in-out;
         pointer-events: none;
     }
-
-    .dropdown > .menu-item:focus + .dropdown-menu {
+    
+    .dropdown-menu.active {
         opacity: 1;
         transform: translateY(0);
         pointer-events: auto;
     }
+
 </style>
 `
 

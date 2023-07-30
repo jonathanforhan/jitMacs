@@ -10,9 +10,13 @@
 
   <body>
     <menu-bar>
-      <img slot="item-name" style="margin: auto" src="src/assets/icons/vscode-dark/more.svg"/>
-      <p>file</p>
-      <p>edit</p>
+      <img slot="item-name" style="margin: auto; pointer-events: none" src="src/assets/icons/vscode-dark/more.svg"/>
+      <div>
+        <p>file</p>
+      </div>
+      <div>
+        <p>edit</p>
+      </div>
     </menu-bar>
     <div id="editor-container" style="height: 60vh"></div>
     <div id="terminal-container" style="height: calc(40vh - 3rem);border-top: 1px solid var(--hl-color)"></div>
