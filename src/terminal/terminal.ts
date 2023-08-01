@@ -13,13 +13,16 @@ export type WindowSize = {
 
 export class XTerminal extends HTMLElement {
     public fd: number = -1;
-    private _xterm: Terminal;
+    private _xterm: Terminal | undefined;
 
     public constructor() {
         super();
 
         listen("pty-event", (e: Event<PtyPayload>) => {
-            console.assert(e.payload.status === 200);if (e.payload.fd === this.fd) this._xterm.write(e.payload.res);
+            console.assert(e.payload.status === 200);
+            if (e.payload.fd === this.fd) {
+                this._xterm?.write(e.payload.res);
+            }
         }).then();
 
         // TODO handle death
@@ -30,7 +33,7 @@ export class XTerminal extends HTMLElement {
     }
 
     public static async create(parent?: HTMLElement): Promise<XTerminal> {
-        const self: XTerminal = document.createElement<XTerminal>("x-terminal" as keyof HTMLElementTagNameMap);
+        const self: XTerminal = <XTerminal>document.createElement("x-terminal" as keyof HTMLElementTagNameMap);
         self.className = "XTerminal"
         self.id = "x-term"
         parent?.appendChild(self);
@@ -46,7 +49,7 @@ export class XTerminal extends HTMLElement {
         self._xterm.loadAddon(fitAddon);
 
         self.fd = await invoke("pty_spawn");
-        self._xterm.open(document.getElementById("x-term"));
+        self._xterm.open(document.getElementById("x-term")!);
 
         self._xterm.onData(async (e: string) => {
             await invoke("pty_write", { fd: self.fd, data: e });

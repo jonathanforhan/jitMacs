@@ -10,17 +10,20 @@
 
   <body>
     <menu-bar>
-      <img slot="item-name" style="margin: auto; pointer-events: none" src="src/assets/icons/vscode-dark/more.svg"/>
-      <div>
+      <img data-item-name style="margin: auto" src="src/assets/icons/vscode-dark/more.svg"/>
+      <div data-item-options>
         <p>file</p>
+        <p>edit</p>
       </div>
-      <div>
+      <img data-item-name style="margin: auto; height: 60%" src="src/assets/icons/vscode-dark/source-control.svg"/>
+      <div data-item-options>
+        <p>file</p>
         <p>edit</p>
       </div>
     </menu-bar>
-    <div id="editor-container" style="height: 60vh"></div>
-    <div id="terminal-container" style="height: calc(40vh - 3rem);border-top: 1px solid var(--hl-color)"></div>
+    <div id="editor-container"></div>
+    <div id="terminal-container"></div>
   </body>
 </html>
 
-<script src="/src/components/menu-bar/menu-bar.ts" defer></script>
+<script type="module" src="/src/components/menu-bar/menu-bar.ts" defer></script>

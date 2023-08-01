@@ -6,8 +6,9 @@ mod tty;
 pub(crate) mod payload;
 use tty::unix::window::WindowSize;
 
-use nix::libc::{self, pid_t};
-use tauri::Manager;
+use nix::libc::pid_t;
+use tauri::{Manager, WindowEvent};
+use crate::payload::InstancePayload;
 
 // map error to string for front end
 macro_rules! js_result {
@@ -43,9 +44,11 @@ fn present(window: tauri::Window) {
     }
 }
 
-
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+            let _ = app.emit_all("single-instance", InstancePayload{ args: argv, cwd });
+        }))
         .invoke_handler(tauri::generate_handler![
                 pty_spawn,
                 pty_write,
